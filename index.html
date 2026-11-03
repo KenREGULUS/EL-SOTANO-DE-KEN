@@ -307,6 +307,10 @@ html[lang=en] .bar b{font-size:clamp(6px,calc((100vw - 204px)/15.5),12px)}
 .stt svg{display:block;filter:drop-shadow(2px 2px 0 #333)}
 body.lock .stt{opacity:0;pointer-events:none}
 #recl{grid-template-columns:minmax(0,1fr)}#recl .sgi{min-width:0;overflow:hidden}
+/* ===== v9: imágenes de las publicaciones (se leen solas desde la carpeta IMAGENES) ===== */
+.ph,.fph,.sp{position:relative;overflow:hidden}
+.pimg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .25s ease;pointer-events:none;-webkit-user-drag:none;user-select:none}
+.pimg.in{opacity:1}
 </style>
 </head>
 <body data-sec="inicio">
@@ -671,7 +675,7 @@ function showFile(){
  var c=cur,en=LANG==='en';$('fmod').dataset.s=curS;
  $('ft1').textContent=(en&&c.te)||c.t;
  $('fv1').innerHTML=(c.v?'<b class="vv">'+c.v+'</b>':'')+'<em class="vs">'+(c.s||'-- MB')+'</em>';
- $('fp1').textContent=brief((en&&c.pe)||c.p);fixAcc($('ft1'));showMod('fmod');
+ $('fp1').textContent=brief((en&&c.pe)||c.p);fixAcc($('ft1'));putImg(document.querySelector('#fmod .ph'),c,'r');showMod('fmod');
 }
 function verified(){subOk=true;try{sessionStorage.setItem('sotano_sub','1')}catch(e){}hideMod();setTimeout(showFile,170)}
 $('sub').addEventListener('click',function(){window.open(SUB,'_blank','noopener');opened=true;away=0;hid=0;vstate(false)});
@@ -948,6 +952,44 @@ var SL={texturas:'texturas textures',addons:'addons',mods:'mods',shaders:'shader
  document.documentElement.style.setProperty('--gt','url('+c.toDataURL()+')')})();
 for(var gi=0;gi<24;gi++)$('favbg').appendChild(document.createElement('i'));
 function fk(s,c){return s+'|'+c.t}
+
+// ===== v9: IMÁGENES POR NOMBRE =====
+// Estructura en GitHub:  IMAGENES/<Nombre exacto de la publicación>/<Nombre exacto>-Rectan.png  (banner horizontal)
+//                        IMAGENES/<Nombre exacto de la publicación>/<Nombre exacto>-Cuadr.png   (cuadrada)
+// El "nombre exacto" es el título (t) de la publicación en la lista C de arriba. Si una imagen no existe, se queda el cuadro oscuro de siempre.
+var IMG_DIR='IMAGENES',IMG_EXT='.png',IMG_K={r:'-Rectan',q:'-Cuadr'},IMGC={};
+// Nombre exacto primero; si no aparece, prueba el mismo nombre sin símbolos raros (& ! ' ( ) etc.) por si GitHub o tu equipo te dan problemas con ellos
+function imgNames(t){t=String(t);var a=[t],s=t.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9 _-]/g,'').replace(/\s+/g,' ').trim();if(s&&s!==t)a.push(s);return a}
+function imgLoad(t,k,cb){
+ var key=t+'|'+k,st=IMGC[key];
+ if(st===0)return;
+ if(typeof st==='string'){cb(st);return}
+ if(st){st.push(cb);return}
+ var w=IMGC[key]=[cb],N=imgNames(t),n=0;
+ (function next(){
+  if(n>=N.length){IMGC[key]=0;return}
+  var nm=N[n++],u=IMG_DIR+'/'+encodeURIComponent(nm)+'/'+encodeURIComponent(nm+IMG_K[k]+IMG_EXT),im=new Image();
+  im.onload=function(){IMGC[key]=u;w.forEach(function(f){f(u)})};
+  im.onerror=next;
+  im.src=u;
+ })();
+}
+function putImg(el,c,k){
+ var o=el.querySelector('.pimg');if(o)o.remove();
+ el._tk=(el._tk||0)+1;var tk=el._tk;
+ imgLoad(c.t,k,function(u){
+  if(el._tk!==tk||el.querySelector('.pimg'))return;
+  var im=document.createElement('img');im.className='pimg';im.alt='';im.decoding='async';im.draggable=false;im.src=u;el.appendChild(im);
+  void im.offsetWidth;im.classList.add('in');
+ });
+}
+function fillImgs(root){
+ [].forEach.call(root.querySelectorAll('.ph,.fph,.sp'),function(el){
+  var h=el.closest('[data-s][data-i]');if(!h)return;
+  var c=C[h.dataset.s]&&C[h.dataset.s][+h.dataset.i];if(!c)return;
+  putImg(el,c,el.classList.contains('ph')?'r':'q');
+ });
+}
 function card(s,i){
  var c=C[s][i],en=LANG==='en',a=' data-s="'+s+'" data-i="'+i+'"';
  return '<article class="card"'+a+'><h2>'+((en&&c.te)||c.t)+'<span class="ver">'+(c.v?'<b class="vv">'+c.v+'</b>':'')+'<em class="vs">'+(c.s||'-- MB')+'</em></span></h2><div class="ph"></div><p>'+((en&&c.pe)||c.p)+'</p><div class="act"><button class="fv'+(FV[fk(s,c)]?' on':'')+'"'+a+' aria-label="'+tr('fav')+'">'+HT+'</button><button class="slot"'+a+'>'+tr('enlace')+'</button></div></article>';
@@ -958,7 +1000,7 @@ function draw(){
  if(h){$('cards').innerHTML='';$('tipt').textContent=(TIPS[LANG]||TIPS.es)[tipN];drawRec();return}
  if(r){L=found(QRY);$('rq').textContent=QRY}else L=C[SEC].map(function(c,i){return[SEC,i]}).filter(function(p){return vis(p[0],C[p[0]][p[1]])&&vfok(C[p[0]][p[1]])});
  $('cards').innerHTML=L.length?L.map(function(p){return card(p[0],p[1])}).join(''):'<div class="fe"><p>'+tr(!r&&VF?'vfe':'sinres')+'</p></div>';
- fixAcc($('cards'));
+ fixAcc($('cards'));fillImgs($('cards'));
 }
 function showSec(s,keep,noTop){
  if(s==='addons')ED='Bedrock';else if(s==='mods')ED='Java';
@@ -985,7 +1027,7 @@ function sg(){
  if(!L.length||!document.body.classList.contains('srch')){g.classList.remove('on');return}
  g.style.top=(sin.getBoundingClientRect().bottom+10)+'px';
  g.innerHTML=L.map(function(p){var c=C[p[0]][p[1]];return '<button class="sgi" data-s="'+p[0]+'" data-i="'+p[1]+'"><span class="sp"></span><span class="sgt"><b>'+((LANG==='en'&&c.te)||c.t)+'</b><em>'+(c.v||'')+'<s>'+(c.s||'-- MB')+'</s><u>'+edOf(c,p[0]).toUpperCase()+'</u></em></span></button>'}).join('');
- g.classList.add('on');fixAcc(g);
+ g.classList.add('on');fixAcc(g);fillImgs(g);
 }
 $('sg').addEventListener('mousedown',function(e){e.preventDefault()});
 function doSearch(){var q=sin.value.trim();if(!q)return;QRY=q;chipS=null;closeSearch(true);showSec('search')}
@@ -995,7 +1037,7 @@ function goTo(s,i){
 }
 // favoritos
 function tgl(s,i){
- var k=fk(s,C[s][i]);if(FV[k])delete FV[k];else FV[k]=1;try{localStorage.setItem('sotano_fav',JSON.stringify(FV))}catch(e){}
+ var k=fk(s,C[s][i]);try{FV=JSON.parse(localStorage.getItem('sotano_fav')||'{}')||{}}catch(e){}if(FV[k])delete FV[k];else FV[k]=1;try{localStorage.setItem('sotano_fav',JSON.stringify(FV))}catch(e){}
  [].forEach.call(document.querySelectorAll('.fv[data-s="'+s+'"][data-i="'+i+'"]'),function(x){x.classList.toggle('on',!!FV[k])});
  if(favOpen)drawFav();
 }
@@ -1005,7 +1047,7 @@ function fcard(s,i){
 }
 function drawFav(){
  var o='';['texturas','addons','shaders','mods'].forEach(function(s){var h2='';C[s].forEach(function(c,i){if(FV[fk(s,c)])h2+=fcard(s,i)});if(h2)o+='<div class="dv" data-s="'+s+'"><b>'+tyL(s)+'</b><i></i></div>'+h2});
- $('fwr').innerHTML=o||'<div class="fe"><p>'+tr('fve')+'</p><b>:(</b></div>';fixAcc($('fwr'));
+ $('fwr').innerHTML=o||'<div class="fe"><p>'+tr('fve')+'</p><b>:(</b></div>';fixAcc($('fwr'));fillImgs($('fwr'));
 }
 function fanim(out,done){
  var hb=$('favbtn').getBoundingClientRect(),hx=hb.left+hb.width/2,hy=hb.top+hb.height/2,P=[].slice.call($('favbg').children).concat($('favh'),$('favt'),$('favx'),$('favc'));
@@ -1103,7 +1145,7 @@ function drawRec(){
   var p=k.split('|'),s=p[0],t=p.slice(1).join('|'),i=-1;(C[s]||[]).forEach(function(c,j){if(c.t===t)i=j});if(i<0)return;
   var c=C[s][i];o+='<button class="sgi" data-s="'+s+'" data-i="'+i+'"><span class="sp"></span><span class="sgt"><b>'+((LANG==='en'&&c.te)||c.t)+'</b><em>'+(c.v||'')+'<s>'+(c.s||'-- MB')+'</s><u>'+edOf(c,s).toUpperCase()+'</u></em></span></button>';
  });
- $('recc').hidden=!o;$('recl').innerHTML=o;fixAcc($('recl'));
+ $('recc').hidden=!o;$('recl').innerHTML=o;fixAcc($('recl'));fillImgs($('recl'));
 }
 
 // Atajos de teclado: "/" o Ctrl+K abren el buscador (Esc ya cierra ventanas, menú, favoritos y buscador)
