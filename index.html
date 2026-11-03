@@ -318,10 +318,13 @@ body.lock .stt{opacity:0;pointer-events:none}
 <div id="load"><div id="sp" aria-hidden="true"></div><div class="lb"><i id="lf"></i></div></div>
 <script>
 // Barra real: 4 pasos (hoja de fuentes, Press Start 2P, VT323, fuente aplicada). Si algo falla, reintenta solo.
+// v10: además de las fuentes (mitad de la barra), la barra espera a que carguen TODAS las imágenes de la web (la otra mitad).
 (function(){
 var F=['Press Start 2P','VT323'],T='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ÁÉÍÓÚÜÑáéíóúüñ¿¡?!.,:;·/()-+_%>',
 SRC=['https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=block','https://fonts.bunny.net/css?family=press-start-2p:400|vt323:400&display=block'],
 S={c:0,a:0,b:0,r:0,p:0},fin=false,att=0,last=-1,rt=0,wd,lf=document.getElementById('lf'),ld=document.getElementById('load'),sp=document.getElementById('sp');
+var IM={t:0,d:0}; // v10: IM.t = total de imágenes por cargar, IM.d = imágenes ya resueltas (cargadas o inexistentes)
+S.i=0; // v10: 1 cuando ya terminaron todas las imágenes
 [[3,0],[4,0],[5,1],[6,2],[6,3],[6,4],[5,5],[4,6],[3,6],[2,6],[1,5],[0,4],[0,3],[0,2],[1,1],[2,0]].forEach(function(c,i){var e=document.createElement('span');e.style.left=c[0]*8+'px';e.style.top=c[1]*8+'px';e.style.animationDelay=(i*.08-1.28).toFixed(2)+'s';sp.appendChild(e)});
 function n(){return S.c+S.a+S.b+S.r}
 // v8_3: la pantalla de carga NO se quita hasta que la página ya terminó de armarse (así los botones de idioma responden al primer toque)
@@ -330,9 +333,15 @@ function hideLd(){
  setTimeout(function(){ld.style.display='none'},350)
 }
 function prog(){
- lf.style.width=(n()*25)+'%';
- if(n()===4&&!fin){fin=true;clearInterval(wd);sp.style.display='none';hideLd()}
+ // v10: fuentes = 4 pasos de 12.5% (50%) + imágenes = otro 50% (proporcional a las que ya cargaron)
+ lf.style.width=(n()*12.5+(S.i?50:(IM.t?50*IM.d/IM.t:0)))+'%';
+ if(n()===4&&S.i&&!fin){fin=true;clearInterval(wd);sp.style.display='none';hideLd()}
 }
+// v10: el código principal de la página avisa por aquí cuántas imágenes lleva cargadas y cuándo terminó
+window.imgProg=function(t,d){IM.t=t;IM.d=d;prog()};
+window.imgDone=function(){S.i=1;prog()};
+// v10: seguro: si por cualquier motivo el código de imágenes no arrancó, la barra no se queda trabada para siempre
+document.addEventListener('DOMContentLoaded',function(){if(typeof window.imgPreload!=='function'&&!S.i){S.i=1;prog()}});
 function applied(){
  try{var c=document.createElement('canvas').getContext('2d'),s='mmmmWWWWiiii',w;
   return F.every(function(f){c.font='32px monospace';w=c.measureText(s).width;c.font='32px "'+f+'",monospace';return c.measureText(s).width!==w});
@@ -675,7 +684,7 @@ function showFile(){
  var c=cur,en=LANG==='en';$('fmod').dataset.s=curS;
  $('ft1').textContent=(en&&c.te)||c.t;
  $('fv1').innerHTML=(c.v?'<b class="vv">'+c.v+'</b>':'')+'<em class="vs">'+(c.s||'-- MB')+'</em>';
- $('fp1').textContent=brief((en&&c.pe)||c.p);fixAcc($('ft1'));putImg(document.querySelector('#fmod .ph'),c,'r');showMod('fmod');
+ $('fp1').textContent=brief((en&&c.pe)||c.p);fixAcc($('ft1'));putImg(document.querySelector('#fmod .ph'),c,'r',curS);showMod('fmod');
 }
 function verified(){subOk=true;try{sessionStorage.setItem('sotano_sub','1')}catch(e){}hideMod();setTimeout(showFile,170)}
 $('sub').addEventListener('click',function(){window.open(SUB,'_blank','noopener');opened=true;away=0;hid=0;vstate(false)});
@@ -953,31 +962,41 @@ var SL={texturas:'texturas textures',addons:'addons',mods:'mods',shaders:'shader
 for(var gi=0;gi<24;gi++)$('favbg').appendChild(document.createElement('i'));
 function fk(s,c){return s+'|'+c.t}
 
-// ===== v9: IMÁGENES POR NOMBRE =====
-// Estructura en GitHub:  IMAGENES/<Nombre exacto de la publicación>/<Nombre exacto>-Rectan.png  (banner horizontal)
-//                        IMAGENES/<Nombre exacto de la publicación>/<Nombre exacto>-Cuadr.png   (cuadrada)
+// ===== v9: IMÁGENES POR NOMBRE (v10: ahora organizadas por Minecraft y por apartado) =====
+// Estructura en GitHub:  IMAGENES/<MC BEDROK o MC JAVA>/<APARTADO>/<Nombre exacto de la publicación>/<Nombre exacto>-Rectan.png  (banner horizontal)
+//                        IMAGENES/<MC BEDROK o MC JAVA>/<APARTADO>/<Nombre exacto de la publicación>/<Nombre exacto>-Cuadr.png   (cuadrada)
+// MC BEDROK → TEXTURAS, ADDONS, SHADERS   |   MC JAVA → TEXTURAS, MODS, SHADERS
 // El "nombre exacto" es el título (t) de la publicación en la lista C de arriba. Si una imagen no existe, se queda el cuadro oscuro de siempre.
 var IMG_DIR='IMAGENES',IMG_EXT='.png',IMG_K={r:'-Rectan',q:'-Cuadr'},IMGC={};
+// v10: nombres de las carpetas en GitHub (deben escribirse EXACTAMENTE igual, GitHub distingue mayúsculas de minúsculas)
+var IMG_ED={Java:'MC JAVA',Bedrock:'MC BEDROK'},IMG_SEC={texturas:'TEXTURAS',addons:'ADDONS',mods:'MODS',shaders:'SHADERS'};
+// v10: IMGF = avisos de "esta imagen no existe", IMGKEEP = guarda las imágenes precargadas, IMG_TIMEOUT = máximo de espera por imagen en la barra de carga (ms)
+var IMGF={},IMGKEEP=[],IMG_TIMEOUT=20000;
+// v10: carpeta donde vive la publicación c del apartado s: IMAGENES/MC BEDROK/TEXTURAS/
+function imgBase(s,c){return IMG_DIR+'/'+encodeURIComponent(IMG_ED[edOf(c,s)]||IMG_ED.Bedrock)+'/'+encodeURIComponent(IMG_SEC[s]||String(s).toUpperCase())+'/'}
 // Nombre exacto primero; si no aparece, prueba el mismo nombre sin símbolos raros (& ! ' ( ) etc.) por si GitHub o tu equipo te dan problemas con ellos
 function imgNames(t){t=String(t);var a=[t],s=t.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9 _-]/g,'').replace(/\s+/g,' ').trim();if(s&&s!==t)a.push(s);return a}
-function imgLoad(t,k,cb){
- var key=t+'|'+k,st=IMGC[key];
- if(st===0)return;
- if(typeof st==='string'){cb(st);return}
- if(st){st.push(cb);return}
- var w=IMGC[key]=[cb],N=imgNames(t),n=0;
+// v10: imgLoad(c,s,k,cb,fl): c = publicación, s = apartado, k = 'r' o 'q', cb = si existe, fl = si no existe (opcional)
+function imgLoad(c,s,k,cb,fl){
+ var t=c.t,key=s+'|'+edOf(c,s)+'|'+t+'|'+k,st=IMGC[key];
+ if(st===0){if(fl)fl();return}
+ if(typeof st==='string'){if(cb)cb(st);return}
+ if(st){if(cb)st.push(cb);if(fl)IMGF[key].push(fl);return}
+ var w=IMGC[key]=[],F=IMGF[key]=[],N=imgNames(t),n=0,B=imgBase(s,c);
+ if(cb)w.push(cb);if(fl)F.push(fl);
  (function next(){
-  if(n>=N.length){IMGC[key]=0;return}
-  var nm=N[n++],u=IMG_DIR+'/'+encodeURIComponent(nm)+'/'+encodeURIComponent(nm+IMG_K[k]+IMG_EXT),im=new Image();
+  if(n>=N.length){IMGC[key]=0;F.forEach(function(f){f()});return}
+  var nm=N[n++],u=B+encodeURIComponent(nm)+'/'+encodeURIComponent(nm+IMG_K[k]+IMG_EXT),im=new Image();
+  IMGKEEP.push(im);
   im.onload=function(){IMGC[key]=u;w.forEach(function(f){f(u)})};
   im.onerror=next;
   im.src=u;
  })();
 }
-function putImg(el,c,k){
+function putImg(el,c,k,s){
  var o=el.querySelector('.pimg');if(o)o.remove();
  el._tk=(el._tk||0)+1;var tk=el._tk;
- imgLoad(c.t,k,function(u){
+ imgLoad(c,s,k,function(u){
   if(el._tk!==tk||el.querySelector('.pimg'))return;
   var im=document.createElement('img');im.className='pimg';im.alt='';im.decoding='async';im.draggable=false;im.src=u;el.appendChild(im);
   void im.offsetWidth;im.classList.add('in');
@@ -987,9 +1006,27 @@ function fillImgs(root){
  [].forEach.call(root.querySelectorAll('.ph,.fph,.sp'),function(el){
   var h=el.closest('[data-s][data-i]');if(!h)return;
   var c=C[h.dataset.s]&&C[h.dataset.s][+h.dataset.i];if(!c)return;
-  putImg(el,c,el.classList.contains('ph')?'r':'q');
+  putImg(el,c,el.classList.contains('ph')?'r':'q',h.dataset.s);
  });
 }
+// ===== v10: PRECARGA de TODAS las imágenes de la web durante la barra de carga =====
+// Recorre todas las publicaciones de todos los apartados (la imagen rectangular y la cuadrada de cada una) y las pide al arrancar.
+// La barra de carga avanza con cada imagen que termina (cargada o inexistente) y no llega al final hasta que terminan todas.
+// Si una sola imagen se queda colgada más de IMG_TIMEOUT ms, la barra deja de esperarla (la imagen igual aparece luego si llega).
+function imgPreload(){
+ var J=[],tot,d=0;
+ Object.keys(C).forEach(function(s){C[s].forEach(function(c){J.push([s,c,'r']);J.push([s,c,'q'])})});
+ tot=J.length;
+ if(window.imgProg)window.imgProg(tot,0);
+ if(!tot){if(window.imgDone)window.imgDone();return}
+ J.forEach(function(j){
+  var f=0,tm=setTimeout(end,IMG_TIMEOUT);
+  function end(){if(f)return;f=1;clearTimeout(tm);d++;if(window.imgProg)window.imgProg(tot,d);if(d>=tot&&window.imgDone)window.imgDone()}
+  imgLoad(j[1],j[0],j[2],end,end);
+ });
+}
+window.imgPreload=imgPreload;
+try{imgPreload()}catch(e){if(window.imgDone)window.imgDone()}
 function card(s,i){
  var c=C[s][i],en=LANG==='en',a=' data-s="'+s+'" data-i="'+i+'"';
  return '<article class="card"'+a+'><h2>'+((en&&c.te)||c.t)+'<span class="ver">'+(c.v?'<b class="vv">'+c.v+'</b>':'')+'<em class="vs">'+(c.s||'-- MB')+'</em></span></h2><div class="ph"></div><p>'+((en&&c.pe)||c.p)+'</p><div class="act"><button class="fv'+(FV[fk(s,c)]?' on':'')+'"'+a+' aria-label="'+tr('fav')+'">'+HT+'</button><button class="slot"'+a+'>'+tr('enlace')+'</button></div></article>';
